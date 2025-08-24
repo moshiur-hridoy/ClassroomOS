@@ -50,7 +50,6 @@ const NAV_MAIN: NavItem[] = [
 ]
 
 const NAV_SECONDARY: NavItem[] = [
-  { title: "Users & Roles", href: "/settings/users", icon: Users2 },
   { title: "Settings", href: "/settings", icon: Settings2 },
 ]
 

@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/registry/new-york-v4/ui/button";
 import { Input } from "@/registry/new-york-v4/ui/input";
@@ -34,6 +35,67 @@ const demoBranches = [
   { id: "b2", name: "Mirpur Center", internalName: "M1" },
 ];
 
+// Demo batches data (same as main page)
+const demoBatches = [
+  {
+    id: "bt1",
+    name: "IRC1",
+    internalName: "C1",
+    branchId: "b1",
+    program: "IELTS" as Program,
+    startDate: new Date("2025-09-01"),
+    endDate: new Date("2025-11-30"),
+    days: ["Sun", "Tue", "Thu"] as Weekday[],
+    startTime: "10:00",
+    endTime: "12:00",
+    capacity: 30,
+    admissionStartDate: new Date("2025-08-15"),
+    admissionEndDate: new Date("2025-08-31"),
+    status: "Running" as BatchStatus,
+    enrolled: 18,
+    totalClasses: 80,
+    completedClasses: 30,
+  },
+  {
+    id: "bt2",
+    name: "IRC2",
+    internalName: "C3",
+    branchId: "b2",
+    program: "Spoken English" as Program,
+    startDate: new Date("2025-09-15"),
+    endDate: new Date("2025-12-15"),
+    days: ["Mon", "Wed", "Fri"] as Weekday[],
+    startTime: "14:00",
+    endTime: "16:00",
+    capacity: 25,
+    admissionStartDate: new Date("2025-09-01"),
+    admissionEndDate: new Date("2025-09-14"),
+    status: "Admission Ongoing" as BatchStatus,
+    enrolled: 0,
+    totalClasses: 80,
+    completedClasses: 0,
+  },
+  {
+    id: "bt3",
+    name: "IRC3",
+    internalName: "C5",
+    branchId: "b1",
+    program: "TOEFL" as Program,
+    startDate: new Date("2025-08-01"),
+    endDate: new Date("2025-10-31"),
+    days: ["Tue", "Thu", "Sat"] as Weekday[],
+    startTime: "16:00",
+    endTime: "18:00",
+    capacity: 20,
+    admissionStartDate: new Date("2025-07-15"),
+    admissionEndDate: new Date("2025-07-31"),
+    status: "Running" as BatchStatus,
+    enrolled: 15,
+    totalClasses: 80,
+    completedClasses: 60,
+  },
+];
+
 type FormFields = {
   name: string;
   internalName: string;
@@ -50,7 +112,9 @@ type FormFields = {
   status: BatchStatus;
 };
 
-type FormState = FormFields & { errors: Partial<Record<keyof FormFields | `days.${number}`, string>> };
+type FormState = FormFields & {
+  errors: Partial<Record<keyof FormFields | `days.${number}`, string>>;
+};
 
 function emptyForm(): FormState {
   return {
@@ -71,8 +135,38 @@ function emptyForm(): FormState {
   };
 }
 
-export default function NewBatchPage() {
+interface EditBatchPageProps {
+  params: {
+    id: string;
+  };
+}
+
+export default function EditBatchPage({ params }: EditBatchPageProps) {
+  const router = useRouter();
   const [formState, setFormState] = React.useState<FormState>(emptyForm());
+
+  // Load batch data on mount
+  React.useEffect(() => {
+    const batch = demoBatches.find((b) => b.id === params.id);
+    if (batch) {
+      setFormState({
+        name: batch.name,
+        internalName: batch.internalName,
+        branchId: batch.branchId,
+        program: batch.program,
+        startDate: batch.startDate,
+        endDate: batch.endDate,
+        days: [...batch.days],
+        startTime: batch.startTime,
+        endTime: batch.endTime,
+        capacity: batch.capacity.toString(),
+        admissionStartDate: batch.admissionStartDate,
+        admissionEndDate: batch.admissionEndDate,
+        status: batch.status,
+        errors: {},
+      });
+    }
+  }, [params.id]);
 
   function setField<K extends keyof FormFields>(key: K, value: FormFields[K]) {
     setFormState((s) => ({ ...s, [key]: value }));
@@ -131,7 +225,23 @@ export default function NewBatchPage() {
     e.preventDefault();
     if (!validate()) return;
     // Placeholder: integrate persistence later
-    window.history.back();
+    router.push("/batches");
+  }
+
+  const currentBatch = demoBatches.find((b) => b.id === params.id);
+  if (!currentBatch) {
+    return (
+      <div className="flex h-full w-full flex-col">
+        <div className="flex items-center gap-3 px-4 py-4">
+          <Button asChild variant="outline">
+            <Link href="/batches" className="inline-flex items-center gap-2">
+              <ChevronLeft className="size-4" /> Back
+            </Link>
+          </Button>
+          <h1 className="text-xl font-semibold">Batch not found</h1>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -142,7 +252,7 @@ export default function NewBatchPage() {
             <ChevronLeft className="size-4" /> Back
           </Link>
         </Button>
-        <h1 className="text-xl font-semibold">Add new Batch</h1>
+        <h1 className="text-xl font-semibold">Edit Batch</h1>
       </div>
       <Separator />
 
@@ -359,12 +469,10 @@ export default function NewBatchPage() {
             <Button asChild variant="outline">
               <Link href="/batches">Cancel</Link>
             </Button>
-            <Button type="submit">Create</Button>
+            <Button type="submit">Save Changes</Button>
           </div>
         </div>
       </form>
     </div>
   );
 }
-
-

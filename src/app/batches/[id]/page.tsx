@@ -122,6 +122,20 @@ export default function BatchDetailPage() {
   const [generatorOpen, setGeneratorOpen] = React.useState(false);
   const [editingActivity, setEditingActivity] = React.useState<string | null>(null);
   const [highlightedActivity, setHighlightedActivity] = React.useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = React.useState(false);
+  const [pendingActivities, setPendingActivities] = React.useState<Activity[]>([]);
+  const [hasPendingChanges, setHasPendingChanges] = React.useState(false);
+  const [selectedActivities, setSelectedActivities] = React.useState<Set<string>>(new Set());
+  const [assignTeacherOpen, setAssignTeacherOpen] = React.useState(false);
+  const [selectedTeachers, setSelectedTeachers] = React.useState<string[]>([]);
+  const [toast, setToast] = React.useState<{ message: string; visible: boolean }>({ message: "", visible: false });
+
+  function showToast(message: string) {
+    setToast({ message, visible: true });
+    setTimeout(() => {
+      setToast({ message: "", visible: false });
+    }, 3000);
+  }
 
   if (!batch) {
     return (
@@ -135,6 +149,127 @@ export default function BatchDetailPage() {
   }
 
   const branch = demoBranches.find(b => b.id === batch.branchId);
+
+  // Generate activities inline
+  async function generateActivitiesInline() {
+    if (!batch) return;
+    
+    setIsGenerating(true);
+    setHasPendingChanges(false);
+    
+    // Simulate API call with loading
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    
+    const baseDate = new Date(batch.startDate);
+    const generatedActivities: Activity[] = Array.from({ length: 8 }).map((_, i) => {
+      const d = new Date(baseDate);
+      d.setDate(d.getDate() + i * 2); // Every 2 days
+      return {
+        id: `act-${i + 1}`,
+        title: `Class ${i + 1}`,
+        code: `IRL0${i + 1}`,
+        tag: i === 1 ? "Exam" : i === 3 ? "Play Day" : i === 5 ? "Rating" : "Lecture",
+        date: d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" }),
+        time: `${batch.startTime} - ${batch.endTime}`,
+        roomId: "",
+        teachers: "",
+      };
+    });
+    
+    setPendingActivities(generatedActivities);
+    setHasPendingChanges(true);
+    setIsGenerating(false);
+  }
+
+  function saveActivities() {
+    setActivities(pendingActivities);
+    setPendingActivities([]);
+    setHasPendingChanges(false);
+  }
+
+  function discardActivities() {
+    setPendingActivities([]);
+    setHasPendingChanges(false);
+  }
+
+  function toggleActivitySelection(activityId: string) {
+    setSelectedActivities(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(activityId)) {
+        newSet.delete(activityId);
+      } else {
+        newSet.add(activityId);
+      }
+      return newSet;
+    });
+  }
+
+  function toggleSelectAll() {
+    const allActivityIds = activities.map(a => a.id);
+    if (selectedActivities.size === activities.length) {
+      setSelectedActivities(new Set());
+    } else {
+      setSelectedActivities(new Set(allActivityIds));
+    }
+  }
+
+  function assignTeachersToSelected() {
+    if (selectedTeachers.length === 0) return;
+    
+    const teachersString = selectedTeachers.join(', ');
+    const classCount = selectedActivities.size;
+    
+    // Update saved activities
+    setActivities(prev => 
+      prev.map(activity => 
+        selectedActivities.has(activity.id) 
+          ? { ...activity, teachers: teachersString }
+          : activity
+      )
+    );
+    // Update pending activities
+    setPendingActivities(prev => 
+      prev.map(activity => 
+        selectedActivities.has(activity.id) 
+          ? { ...activity, teachers: teachersString }
+          : activity
+      )
+    );
+    
+    // Show success toast
+    const teacherNames = selectedTeachers.join(', ');
+    showToast(`${teacherNames} assigned to ${classCount} class${classCount !== 1 ? 'es' : ''}`);
+    
+    // Keep activities selected, only clear teacher selection and close dialog
+    setSelectedTeachers([]);
+    setAssignTeacherOpen(false);
+  }
+
+  function assignRoomToSelected(roomId: string) {
+    const classCount = selectedActivities.size;
+    
+    // Update saved activities
+    setActivities(prev => 
+      prev.map(activity => 
+        selectedActivities.has(activity.id) 
+          ? { ...activity, roomId: roomId }
+          : activity
+      )
+    );
+    // Update pending activities
+    setPendingActivities(prev => 
+      prev.map(activity => 
+        selectedActivities.has(activity.id) 
+          ? { ...activity, roomId: roomId }
+          : activity
+      )
+    );
+    
+    // Show success toast
+    showToast(`${roomId} assigned to ${classCount} class${classCount !== 1 ? 'es' : ''}`);
+    
+    // Keep activities selected so user can assign teachers too
+  }
 
   // helpers moved to module scope
 
@@ -229,13 +364,7 @@ export default function BatchDetailPage() {
       <div className="px-4 pb-2">
         <div className="flex items-center justify-between gap-3 mb-4">
           <h2 className="text-xl font-semibold">Batch Activity Planner</h2>
-          <Button className="gap-2">
-            <Plus className="size-4" /> Add Activity
-          </Button>
-        </div>
-        
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <div className="inline-flex items-center gap-2 rounded-full border bg-background p-1 text-sm">
               <Button
                 variant={view === "list" ? "default" : "ghost"}
@@ -254,9 +383,57 @@ export default function BatchDetailPage() {
                 <CalendarIcon className="mr-2 size-4" /> Calendar
               </Button>
             </div>
+            <Button className="gap-2" disabled={activities.length === 0}>
+              <Plus className="size-4" /> Add Activity
+            </Button>
           </div>
+        </div>
+        
+        <div className="flex items-center justify-between gap-3">
+          {/* Select All - only show when there are activities */}
+          {activities.length > 0 && (
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-gray-300"
+                onChange={toggleSelectAll}
+                checked={activities.length > 0 && selectedActivities.size === activities.length}
+                indeterminate={selectedActivities.size > 0 && selectedActivities.size < activities.length}
+              />
+              <span className="text-sm text-muted-foreground">
+                {selectedActivities.size > 0 ? `${selectedActivities.size} selected` : "Select All"}
+              </span>
+              {selectedActivities.size > 0 && (
+                <div className="flex items-center gap-2 ml-4">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8"
+                    onClick={() => setAssignTeacherOpen(true)}
+                  >
+                    Assign Teacher
+                  </Button>
+                                        <select 
+                        className="border-input bg-background text-foreground h-8 rounded-md border px-2 text-sm min-w-28"
+                        onChange={(e) => e.target.value && assignRoomToSelected(e.target.value)}
+                        defaultValue=""
+                      >
+                        <option value="" disabled>Assign Room</option>
+                        <option value="A1">Room A1</option>
+                        <option value="A2">Room A2</option>
+                        <option value="B1">Room B1</option>
+                        <option value="B2">Room B2</option>
+                        <option value="B7">Room B7</option>
+                        <option value="C1">Room C1</option>
+                        <option value="Lab 1">Lab 1</option>
+                        <option value="Conference Room">Conference Room</option>
+                      </select>
+                </div>
+              )}
+            </div>
+          )}
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 ml-auto">
             <div className="hidden sm:block">
               <select className="border-input bg-background text-foreground h-9 rounded-md border px-3 text-sm min-w-40">
                 <option value="">Select batch</option>
@@ -273,19 +450,186 @@ export default function BatchDetailPage() {
         </div>
       </div>
 
-      {/* Empty state */}
-      {activities.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center px-4 py-10">
-          <div className="flex max-w-md flex-col items-center gap-4 text-center">
-            <EmptyCoursesIllustration />
-            <div className="text-muted-foreground">No Activity Found</div>
-            <Button className="gap-2" onClick={() => setGeneratorOpen(true)}>
-              <Plus className="size-4" /> Generate Batch Activity
-            </Button>
+      {/* Content Area */}
+      <div className="px-4 pb-8">
+        {/* Shimmer loading */}
+        {isGenerating && (
+          <div className="flex flex-col gap-3 mb-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="animate-pulse">
+                <div className="flex items-center justify-between gap-4 rounded-xl border bg-background p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-lg bg-gray-200 size-10"></div>
+                    <div className="space-y-2">
+                      <div className="h-4 bg-gray-200 rounded w-32"></div>
+                      <div className="h-3 bg-gray-200 rounded w-24"></div>
+                    </div>
+                  </div>
+                  <div className="flex gap-6">
+                    <div className="h-4 bg-gray-200 rounded w-20"></div>
+                    <div className="h-4 bg-gray-200 rounded w-20"></div>
+                    <div className="h-4 bg-gray-200 rounded w-16"></div>
+                    <div className="h-4 bg-gray-200 rounded w-20"></div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
-      ) : (
-        <div className="px-4 pb-8">
+        )}
+
+        {/* Pending activities (green border) */}
+        {hasPendingChanges && pendingActivities.length > 0 && (
+          <div className="mb-6">
+            <div className="border-2 border-green-500 rounded-lg p-4 bg-green-50/50">
+              <div className="flex items-center justify-between mb-4">
+                {/* Select All for pending activities - Left side */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-gray-300"
+                    onChange={() => {
+                      const allPendingIds = pendingActivities.map(a => a.id);
+                      if (selectedActivities.size === pendingActivities.length && 
+                          allPendingIds.every(id => selectedActivities.has(id))) {
+                        // Clear all pending selections
+                        const newSelected = new Set(selectedActivities);
+                        allPendingIds.forEach(id => newSelected.delete(id));
+                        setSelectedActivities(newSelected);
+                      } else {
+                        // Select all pending
+                        const newSelected = new Set(selectedActivities);
+                        allPendingIds.forEach(id => newSelected.add(id));
+                        setSelectedActivities(newSelected);
+                      }
+                    }}
+                    checked={pendingActivities.length > 0 && pendingActivities.every(a => selectedActivities.has(a.id))}
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {pendingActivities.filter(a => selectedActivities.has(a.id)).length > 0 
+                      ? `${pendingActivities.filter(a => selectedActivities.has(a.id)).length} selected` 
+                      : "Select All"}
+                  </span>
+                  {pendingActivities.some(a => selectedActivities.has(a.id)) && (
+                    <div className="flex items-center gap-2 ml-4">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-8"
+                        onClick={() => setAssignTeacherOpen(true)}
+                      >
+                        Assign Teacher
+                      </Button>
+                      <select 
+                        className="border-input bg-background text-foreground h-8 rounded-md border px-2 text-sm min-w-28"
+                        onChange={(e) => e.target.value && assignRoomToSelected(e.target.value)}
+                        defaultValue=""
+                      >
+                        <option value="" disabled>Assign Room</option>
+                        <option value="A1">Room A1</option>
+                        <option value="A2">Room A2</option>
+                        <option value="B1">Room B1</option>
+                        <option value="B2">Room B2</option>
+                        <option value="B7">Room B7</option>
+                        <option value="C1">Room C1</option>
+                        <option value="Lab 1">Lab 1</option>
+                        <option value="Conference Room">Conference Room</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Generated Activities text and buttons - Right side */}
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="size-2 bg-green-500 rounded-full"></div>
+                    <span className="text-green-700 font-medium text-sm">Generated Activities (Not Saved)</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={discardActivities}>
+                      Discard
+                    </Button>
+                    <Button size="sm" onClick={saveActivities}>
+                      Save Activities
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-col gap-3">
+                {pendingActivities.map((a) => (
+                  <div key={a.id} className="flex items-center justify-between gap-4 rounded-xl border bg-white p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center justify-center size-10">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-gray-300"
+                          onChange={() => toggleActivitySelection(a.id)}
+                          checked={selectedActivities.has(a.id)}
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 text-sm font-semibold">
+                          <span>{a.title}</span>
+                          <span className="text-muted-foreground">{a.code}</span>
+                          <Badge 
+                            variant="secondary" 
+                            className={`rounded-full border ${getActivityTypeColor(a.tag)}`}
+                          >
+                            {a.tag}
+                          </Badge>
+                        </div>
+                        <div className="text-muted-foreground text-sm">Introductory class and Listening (Pre-assessment)</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-6">
+                      <div className="grid grid-cols-4 gap-6 text-sm">
+                        <div>
+                          <div className="text-muted-foreground mb-1">Date</div>
+                          <div className="font-medium">{a.date}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground mb-1">Time</div>
+                          <div>{a.time}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground mb-1">Room</div>
+                          <div className="font-medium">{a.roomId || "Not assigned"}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground mb-1">Teacher</div>
+                          <div className="font-medium">{a.teachers || "Not assigned"}</div>
+                        </div>
+                      </div>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {activities.length === 0 && !isGenerating && !hasPendingChanges && (
+          <div className="flex flex-1 items-center justify-center py-20">
+            <div className="flex max-w-md flex-col items-center gap-4 text-center">
+              <EmptyCoursesIllustration />
+              <div className="text-muted-foreground">No Activity Found</div>
+              <Button 
+                className="gap-2" 
+                onClick={generateActivitiesInline}
+                disabled={isGenerating}
+              >
+                <Plus className="size-4" /> 
+                {isGenerating ? "Generating..." : "Generate Batch Activity"}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Saved activities */}
+        {activities.length > 0 && (
           <div className="flex flex-col gap-3">
             {activities.map((a) => (
               <div 
@@ -295,7 +639,14 @@ export default function BatchDetailPage() {
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-muted text-muted-foreground grid size-10 place-items-center">📘</div>
+                  <div className="flex items-center justify-center size-10">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-gray-300"
+                      onChange={() => toggleActivitySelection(a.id)}
+                      checked={selectedActivities.has(a.id)}
+                    />
+                  </div>
                   <div>
                     <div className="flex items-center gap-2 text-sm font-semibold">
                       <span>{a.title}</span>
@@ -379,19 +730,20 @@ export default function BatchDetailPage() {
                         </div>
                       )}
                     </div>
+
                     <div className="min-w-0">
-                      <div className="text-muted-foreground mb-1">Room ID</div>
-                      <div className="font-medium">{a.roomId}</div>
+                      <div className="text-muted-foreground mb-1">Room</div>
+                      <div className="font-medium">{a.roomId || "Not assigned"}</div>
                     </div>
                     <div className="min-w-0">
-                      <div className="text-muted-foreground mb-1">Teachers</div>
+                      <div className="text-muted-foreground mb-1">Teacher</div>
                       <div className="flex items-center gap-1">
                         <div className="flex -space-x-1">
-                          {a.teachers.split(',').map((teacher, index) => (
+                          {a.teachers ? a.teachers.split(',').map((teacher, index) => (
                             <div key={index} className="w-6 h-6 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center border-2 border-white">
-                              {teacher.trim().charAt(0).toUpperCase()}
+                              {teacher.trim()}
                             </div>
-                          ))}
+                          )) : <span className="text-muted-foreground text-sm">Not assigned</span>}
                         </div>
                       </div>
                     </div>
@@ -403,220 +755,85 @@ export default function BatchDetailPage() {
               </div>
             ))}
           </div>
+        )}
+      </div>
+
+      {/* Assign Teacher Dialog */}
+      <Dialog open={assignTeacherOpen} onOpenChange={setAssignTeacherOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign Teacher</DialogTitle>
+            <DialogDescription>
+              Assign a teacher to {selectedActivities.size} selected class{selectedActivities.size !== 1 ? 'es' : ''}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <label className="text-sm font-medium">Select Teachers</label>
+              <div className="grid gap-2">
+                {[
+                  { code: "JD", name: "John Doe" },
+                  { code: "SS", name: "Sarah Smith" },
+                  { code: "MJ", name: "Michael Johnson" },
+                  { code: "ED", name: "Emily Davis" },
+                  { code: "DW", name: "David Wilson" }
+                ].map((teacher) => (
+                  <label key={teacher.code} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-gray-300"
+                      checked={selectedTeachers.includes(teacher.code)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedTeachers(prev => [...prev, teacher.code]);
+                        } else {
+                          setSelectedTeachers(prev => prev.filter(t => t !== teacher.code));
+                        }
+                      }}
+                    />
+                    <span className="text-sm">{teacher.name} ({teacher.code})</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Select multiple teachers to assign to the selected classes.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setSelectedTeachers([]);
+              setAssignTeacherOpen(false);
+            }}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={assignTeachersToSelected}
+              disabled={selectedTeachers.length === 0}
+            >
+              Assign Teachers
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Toast Notification */}
+      {toast.visible && (
+        <div className="fixed bottom-4 right-4 bg-green-600 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 animate-in slide-in-from-right">
+          <div className="flex items-center justify-center w-5 h-5 bg-white/20 rounded-full">
+            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <span className="text-sm font-medium">{toast.message}</span>
         </div>
       )}
 
-      <GenerateActivityDialog
-        open={generatorOpen}
-        onOpenChange={setGeneratorOpen}
-        batch={batch}
-        onConfirm={(list) => {
-          setActivities(list);
-          setGeneratorOpen(false);
-        }}
-      />
     </div>
   );
 }
 
-function GenerateActivityDialog({
-  open,
-  onOpenChange,
-  batch,
-  onConfirm,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  batch: Batch;
-  onConfirm: (list: Activity[]) => void;
-}) {
-  const [startTime, setStartTime] = React.useState(batch.startTime);
-  const [endTime, setEndTime] = React.useState(batch.endTime);
-  const [room, setRoom] = React.useState("B7");
-  const [teachers, setTeachers] = React.useState("John Doe, Sarah Smith");
-  const [step, setStep] = React.useState<"form" | "loading" | "preview">("form");
-  const [preview, setPreview] = React.useState<Activity[] | null>(null);
 
-  React.useEffect(() => {
-    if (open) {
-      setStartTime(batch.startTime);
-      setEndTime(batch.endTime);
-      setRoom("B7");
-      setTeachers("John Doe, Sarah Smith");
-      setStep("form");
-      setPreview(null);
-    }
-  }, [open, batch.startTime, batch.endTime]);
-
-  async function handleGenerate(e: React.FormEvent) {
-    e.preventDefault();
-    setStep("loading");
-    setPreview(null);
-    // Simulate CMS fetch
-    await new Promise((res) => setTimeout(res, 1800));
-    const baseDate = new Date(batch.startDate);
-    const items: Activity[] = Array.from({ length: 8 }).map((_, i) => {
-      const d = new Date(baseDate);
-      d.setDate(d.getDate() + i);
-      return {
-        id: `act-${i + 1}`,
-        title: `Class ${i + 1}`,
-        code: `IRL0${i + 1}`,
-        tag: i === 1 ? "Exam" : i === 3 ? "Play Day" : i === 5 ? "Rating" : "Lecture",
-        date: d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" }),
-        time: `${formatTime(startTime)} - ${formatTime(endTime)}`,
-        roomId: room,
-        teachers: teachers,
-      };
-    });
-    setPreview(items);
-    setStep("preview");
-  }
-
-  function confirm() {
-    if (preview) onConfirm(preview);
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl sm:max-w-4xl max-h-[90vh] flex flex-col">
-        <DialogHeader className="flex-shrink-0">
-          <DialogTitle>Generate Batch Activity</DialogTitle>
-          <DialogDescription>Prefilled with batch info. Adjust time and room, then generate.</DialogDescription>
-        </DialogHeader>
-
-        <div className="flex-1 overflow-y-auto">
-          {step === "form" && (
-            <>
-              <div className="grid gap-3 rounded-lg border bg-muted/30 p-3 sm:grid-cols-2 md:grid-cols-3">
-                <SummaryItem label="Batch" value={batch.internalName} />
-                <SummaryItem label="Program" value={`${batch.program}`} />
-                <SummaryItem label="Branch" value={demoBranches.find(b=>b.id===batch.branchId)?.name ?? "-"} />
-              </div>
-              <form onSubmit={handleGenerate} className="grid gap-4 pt-2">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <div className="grid gap-1.5">
-                    <label className="text-sm font-medium" htmlFor="start">Class Start Time</label>
-                    <Input id="start" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <label className="text-sm font-medium" htmlFor="end">Class End Time</label>
-                    <Input id="end" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <label className="text-sm font-medium" htmlFor="room">Room Number</label>
-                    <Input id="room" value={room} onChange={(e) => setRoom(e.target.value)} placeholder="e.g., B7" />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <label className="text-sm font-medium" htmlFor="teachers">Teachers</label>
-                    <Input id="teachers" value={teachers} onChange={(e) => setTeachers(e.target.value)} placeholder="e.g., John Doe, Sarah Smith" />
-                  </div>
-                </div>
-              </form>
-            </>
-          )}
-
-          {step === "loading" && (
-            <div className="min-h-40 pt-2">
-              <div className="flex flex-col gap-3">
-                <div className="mx-auto my-6">
-                  <Skeleton className="h-28 w-28 rounded-full" />
-                </div>
-                <div className="grid gap-2">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-3 rounded-xl border bg-background p-4">
-                      <Skeleton className="h-10 w-10 rounded-lg" />
-                      <div className="flex-1 space-y-2">
-                        <Skeleton className="h-4 w-1/3" />
-                        <Skeleton className="h-3 w-2/3" />
-                      </div>
-                      <div className="w-56 space-y-2">
-                        <Skeleton className="h-3 w-full" />
-                        <Skeleton className="h-3 w-full" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {step === "preview" && preview && (
-            <div className="flex flex-col gap-3 pt-2">
-              {preview.map((a) => (
-                <div key={a.id} className="flex items-center justify-between gap-4 rounded-xl border bg-background p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-lg bg-muted text-muted-foreground grid size-10 place-items-center">📘</div>
-                    <div>
-                      <div className="flex items-center gap-2 text-sm font-semibold">
-                        <span>{a.title}</span>
-                        <span className="text-muted-foreground">{a.code}</span>
-                        <Badge 
-                          variant="secondary" 
-                          className={`rounded-full border ${getActivityTypeColor(a.tag)}`}
-                        >
-                          {a.tag}
-                        </Badge>
-                      </div>
-                      <div className="text-muted-foreground text-sm">Introductory class</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <div className="grid grid-cols-4 gap-6 text-sm w-full">
-                      <div className="min-w-0">
-                        <div className="text-muted-foreground">Date</div>
-                        <div className="font-medium">{a.date}</div>
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-muted-foreground">Time</div>
-                        <div className="font-medium">{a.time}</div>
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-muted-foreground">Room ID</div>
-                        <div className="font-medium">{a.roomId}</div>
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-muted-foreground">Teachers</div>
-                        <div className="flex items-center gap-1">
-                          <div className="flex -space-x-1">
-                            {a.teachers.split(',').map((teacher, index) => (
-                              <div key={index} className="w-6 h-6 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center border-2 border-white">
-                                {teacher.trim().charAt(0).toUpperCase()}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Fixed buttons at bottom */}
-        <div className="flex items-center justify-end gap-2 pt-4 border-t flex-shrink-0">
-          {step === "form" && (
-            <>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" onClick={handleGenerate}>Generate</Button>
-            </>
-          )}
-          {step === "preview" && (
-            <>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button onClick={confirm}>Save</Button>
-            </>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 function SummaryItem({ label, value }: { label: string; value: string }) {
   return (
