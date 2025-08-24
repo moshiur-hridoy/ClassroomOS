@@ -394,11 +394,13 @@ export default function BatchDetailPage() {
           {activities.length > 0 && (
             <div className="flex items-center gap-2">
               <input
+                ref={(el) => {
+                  if (el) el.indeterminate = selectedActivities.size > 0 && selectedActivities.size < activities.length;
+                }}
                 type="checkbox"
                 className="h-4 w-4 rounded border-gray-300"
                 onChange={toggleSelectAll}
                 checked={activities.length > 0 && selectedActivities.size === activities.length}
-                indeterminate={selectedActivities.size > 0 && selectedActivities.size < activities.length}
               />
               <span className="text-sm text-muted-foreground">
                 {selectedActivities.size > 0 ? `${selectedActivities.size} selected` : "Select All"}
@@ -485,6 +487,13 @@ export default function BatchDetailPage() {
                 {/* Select All for pending activities - Left side */}
                 <div className="flex items-center gap-2">
                   <input
+                    ref={(el) => {
+                      if (el) {
+                        const allPendingIds = pendingActivities.map(a => a.id);
+                        const selectedPendingCount = allPendingIds.filter(id => selectedActivities.has(id)).length;
+                        el.indeterminate = selectedPendingCount > 0 && selectedPendingCount < pendingActivities.length;
+                      }
+                    }}
                     type="checkbox"
                     className="h-4 w-4 rounded border-gray-300"
                     onChange={() => {

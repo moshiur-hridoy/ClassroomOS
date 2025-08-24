@@ -136,18 +136,19 @@ function emptyForm(): FormState {
 }
 
 interface EditBatchPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
-export default function EditBatchPage({ params }: EditBatchPageProps) {
+export default async function EditBatchPage({ params }: EditBatchPageProps) {
+  const { id } = await params;
   const router = useRouter();
   const [formState, setFormState] = React.useState<FormState>(emptyForm());
 
   // Load batch data on mount
   React.useEffect(() => {
-    const batch = demoBatches.find((b) => b.id === params.id);
+    const batch = demoBatches.find((b) => b.id === id);
     if (batch) {
       setFormState({
         name: batch.name,
@@ -166,7 +167,7 @@ export default function EditBatchPage({ params }: EditBatchPageProps) {
         errors: {},
       });
     }
-  }, [params.id]);
+  }, [id]);
 
   function setField<K extends keyof FormFields>(key: K, value: FormFields[K]) {
     setFormState((s) => ({ ...s, [key]: value }));
@@ -228,7 +229,7 @@ export default function EditBatchPage({ params }: EditBatchPageProps) {
     router.push("/batches");
   }
 
-  const currentBatch = demoBatches.find((b) => b.id === params.id);
+  const currentBatch = demoBatches.find((b) => b.id === id);
   if (!currentBatch) {
     return (
       <div className="flex h-full w-full flex-col">

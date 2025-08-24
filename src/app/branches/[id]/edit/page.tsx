@@ -48,7 +48,8 @@ const demoBranches: Branch[] = [
   },
 ];
 
-export default function EditBranchPage({ params }: { params: { id: string } }) {
+export default async function EditBranchPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const router = useRouter();
   const [currentUserId] = React.useState("mgr-01");
   
@@ -91,7 +92,7 @@ export default function EditBranchPage({ params }: { params: { id: string } }) {
 
   // Load branch data on mount
   React.useEffect(() => {
-    const branch = demoBranches.find(b => b.id === params.id);
+    const branch = demoBranches.find(b => b.id === id);
     if (branch) {
       setFormState({
         name: branch.name,
@@ -104,7 +105,7 @@ export default function EditBranchPage({ params }: { params: { id: string } }) {
         errors: {},
       });
     }
-  }, [params.id]);
+  }, [id]);
 
   function canEditBranch(branch: Branch) {
     if (isAdmin) return true;
@@ -140,7 +141,7 @@ export default function EditBranchPage({ params }: { params: { id: string } }) {
 
     // Unique internalName (excluding current branch)
     const existing = demoBranches.find(
-      (b) => b.internalName.toLowerCase() === formState.internalName.trim().toLowerCase() && b.id !== params.id
+              (b) => b.internalName.toLowerCase() === formState.internalName.trim().toLowerCase() && b.id !== id
     );
     if (existing) errors.internalName = "Internal code must be unique";
 
