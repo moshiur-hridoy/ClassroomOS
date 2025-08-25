@@ -141,33 +141,40 @@ interface EditBatchPageProps {
   }>;
 }
 
-export default async function EditBatchPage({ params }: EditBatchPageProps) {
-  const { id } = await params;
+export default function EditBatchPage({ params }: EditBatchPageProps) {
+  const [id, setId] = React.useState<string>("");
   const router = useRouter();
   const [formState, setFormState] = React.useState<FormState>(emptyForm());
 
-  // Load batch data on mount
+  // Handle async params and load batch data
   React.useEffect(() => {
-    const batch = demoBatches.find((b) => b.id === id);
-    if (batch) {
-      setFormState({
-        name: batch.name,
-        internalName: batch.internalName,
-        branchId: batch.branchId,
-        program: batch.program,
-        startDate: batch.startDate,
-        endDate: batch.endDate,
-        days: [...batch.days],
-        startTime: batch.startTime,
-        endTime: batch.endTime,
-        capacity: batch.capacity.toString(),
-        admissionStartDate: batch.admissionStartDate,
-        admissionEndDate: batch.admissionEndDate,
-        status: batch.status,
-        errors: {},
-      });
-    }
-  }, [id]);
+    const loadParams = async () => {
+      const { id: paramId } = await params;
+      setId(paramId);
+      
+      const batch = demoBatches.find((b) => b.id === paramId);
+      if (batch) {
+        setFormState({
+          name: batch.name,
+          internalName: batch.internalName,
+          branchId: batch.branchId,
+          program: batch.program,
+          startDate: batch.startDate,
+          endDate: batch.endDate,
+          days: [...batch.days],
+          startTime: batch.startTime,
+          endTime: batch.endTime,
+          capacity: batch.capacity.toString(),
+          admissionStartDate: batch.admissionStartDate,
+          admissionEndDate: batch.admissionEndDate,
+          status: batch.status,
+          errors: {},
+        });
+      }
+    };
+    
+    loadParams();
+  }, [params]);
 
   function setField<K extends keyof FormFields>(key: K, value: FormFields[K]) {
     setFormState((s) => ({ ...s, [key]: value }));

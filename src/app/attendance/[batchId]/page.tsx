@@ -10,6 +10,7 @@ import { Input } from "@/registry/new-york-v4/ui/input";
 import { Separator } from "@/registry/new-york-v4/ui/separator";
 import { Badge } from "@/registry/new-york-v4/ui/badge";
 import { Calendar } from "@/registry/new-york-v4/ui/calendar";
+import { Switch } from "@/registry/new-york-v4/ui/switch";
 import {
   Popover,
   PopoverContent,
@@ -22,7 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@/registry/new-york-v4/ui/dropdown-menu";
 
-type Status = "Present" | "Absent" | "Late";
+type Status = "Present" | "Absent";
 
 type StudentRow = {
   studentId: string;
@@ -44,7 +45,7 @@ const demoBatch = {
 
 const demoStudents: StudentRow[] = [
   { studentId: "S-1001", studentName: "Nadia Rahman", punchIn: "09:55", punchOut: "12:05", status: "Present", correctionLog: [] },
-  { studentId: "S-1002", studentName: "Arif Hossain", punchIn: "10:08", punchOut: "12:00", status: "Late", correctionLog: [] },
+  { studentId: "S-1002", studentName: "Arif Hossain", punchIn: "10:08", punchOut: "12:00", status: "Present", correctionLog: [] },
   { studentId: "S-1003", studentName: "Samira Akter", status: "Absent", correctionLog: [] },
 ];
 
@@ -55,6 +56,15 @@ export default function AttendanceDetailPage() {
   const [correctionFor, setCorrectionFor] = React.useState<string | null>(null);
   const [noteText, setNoteText] = React.useState<string>("");
   const [tempStatus, setTempStatus] = React.useState<Status | null>(null);
+  const [searchQuery, setSearchQuery] = React.useState<string>("");
+
+  // Filter rows based on search query
+  const filteredRows = React.useMemo(() => {
+    if (!searchQuery.trim()) return rows;
+    return rows.filter(row => 
+      row.studentName.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [rows, searchQuery]);
 
   function setStatus(studentId: string, status: Status) {
     setRows((prev) => prev.map((r) => (r.studentId === studentId ? { ...r, status } : r)));
@@ -119,6 +129,17 @@ export default function AttendanceDetailPage() {
           </div>
         </div>
 
+        {/* Search Bar */}
+        <div className="mb-4">
+          <Input
+            type="text"
+            placeholder="Search by student name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="max-w-sm"
+          />
+        </div>
+
         <div className="overflow-hidden rounded-lg border">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-foreground">
@@ -132,7 +153,7 @@ export default function AttendanceDetailPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {filteredRows.map((r) => (
                 <tr key={r.studentId} className="border-t">
                   <td className="px-3 py-2">{r.studentName}</td>
                   <td className="px-3 py-2 font-mono">{r.studentId}</td>
@@ -144,14 +165,22 @@ export default function AttendanceDetailPage() {
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <Badge
-                        variant={
-                          r.status === "Present" ? "success" : r.status === "Absent" ? "destructive" : "warning"
-                        }
-                      >
-                        {r.status}
-                      </Badge>
-                      {/* Status dropdown moved to Manual Correction cell when editing */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Present</span>
+                        <Switch
+                          checked={r.status === "Present"}
+                          onCheckedChange={(checked: boolean) => {
+                            setStatus(r.studentId, checked ? "Present" : "Absent");
+                            // Set punch-in time when switching to Present
+                            if (checked && !r.punchIn) {
+                              const now = new Date();
+                              const timeString = now.toTimeString().slice(0, 5); // Format as HH:MM
+                              setTime(r.studentId, "punchIn", timeString);
+                            }
+                          }}
+                        />
+                        <span className="text-sm text-muted-foreground">Absent</span>
+                      </div>
                     </div>
                   </td>
                   <td className="px-3 py-2">
@@ -185,7 +214,6 @@ export default function AttendanceDetailPage() {
                           >
                             <option>Present</option>
                             <option>Absent</option>
-                            <option>Late</option>
                           </select>
                           <Input
                             placeholder="Add note for correction log"

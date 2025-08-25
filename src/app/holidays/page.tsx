@@ -19,6 +19,7 @@ import {
 } from "@/registry/new-york-v4/ui/dialog";
 import { Switch } from "@/registry/new-york-v4/ui/switch";
 
+
 type GovHoliday = {
   name: string;
   date: string; // yyyy-mm-dd
@@ -31,6 +32,8 @@ type TimeBlock = {
   type: "Full Day" | "Time Range";
   startTime?: string; // HH:MM
   endTime?: string; // HH:MM
+  allBranch: boolean;
+  selectedBranches: string[];
 };
 
 const GOVERNMENT_HOLIDAYS: GovHoliday[] = [
@@ -42,12 +45,22 @@ const GOVERNMENT_HOLIDAYS: GovHoliday[] = [
   { name: "Victory Day", date: "2025-12-16" },
 ];
 
+// Demo branches data for time block selection
+const demoBranches = [
+  { id: "b1", name: "Uttara Center", internalName: "U1" },
+  { id: "b2", name: "Mirpur Center", internalName: "M1" },
+];
+
 export default function TimeBlocksPage() {
   const [customBlocks, setCustomBlocks] = React.useState<TimeBlock[]>([]);
   const [open, setOpen] = React.useState(false);
 
   function removeBlock(id: string) {
     setCustomBlocks((prev) => prev.filter((b) => b.id !== id));
+  }
+
+  function handleBranchToggle(branchId: string, checked: boolean) {
+    // This function can be used for future branch management if needed
   }
 
   return (
@@ -88,9 +101,8 @@ export default function TimeBlocksPage() {
         </section>
 
         <section>
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3">
             <h2 className="text-sm font-medium text-muted-foreground">Custom time blocks</h2>
-            <Button variant="outline" size="sm" onClick={() => setOpen(true)}>Add</Button>
           </div>
           <div className="overflow-hidden rounded-lg border">
             <table className="w-full text-sm">
@@ -100,13 +112,14 @@ export default function TimeBlocksPage() {
                   <th className="px-3 py-2">Name</th>
                   <th className="px-3 py-2">Type</th>
                   <th className="px-3 py-2">Time</th>
+                  <th className="px-3 py-2">Branches</th>
                   <th className="px-3 py-2 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {customBlocks.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
+                    <td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">
                       No custom time blocks yet. Click Add to create one.
                     </td>
                   </tr>
@@ -120,6 +133,22 @@ export default function TimeBlocksPage() {
                       </td>
                       <td className="px-3 py-2">
                         {b.type === "Time Range" ? `${b.startTime ?? ""} – ${b.endTime ?? ""}` : "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        {b.allBranch ? (
+                          <Badge variant="secondary">All Branches</Badge>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {b.selectedBranches.map(branchId => {
+                              const branch = demoBranches.find(b => b.id === branchId);
+                              return branch ? (
+                                <Badge key={branchId} variant="outline" className="text-xs">
+                                  {branch.internalName}
+                                </Badge>
+                              ) : null;
+                            })}
+                          </div>
+                        )}
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex items-center justify-end gap-2">
@@ -151,7 +180,8 @@ function AddTimeBlockDialog({
 }) {
   const [name, setName] = React.useState("");
   const [isFullDay, setIsFullDay] = React.useState(true);
-  const [allBranch, setAllBranch] = React.useState(false);
+  const [allBranch, setAllBranch] = React.useState(true);
+  const [selectedBranches, setSelectedBranches] = React.useState<string[]>([]);
   const [date, setDate] = React.useState<Date | undefined>(new Date());
   const [startTime, setStartTime] = React.useState("");
   const [endTime, setEndTime] = React.useState("");
@@ -165,6 +195,7 @@ function AddTimeBlockDialog({
     setEndTime("");
     setReason("");
     setAllBranch(false);
+    setSelectedBranches([]);
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -172,7 +203,18 @@ function AddTimeBlockDialog({
     if (!date || !name.trim()) return;
     const type: TimeBlock["type"] = isFullDay ? "Full Day" : "Time Range";
     if (!isFullDay && (!startTime || !endTime)) return;
-    onCreate({ id: `tb-${Date.now()}`, name: name.trim(), date, type, startTime, endTime });
+    if (!allBranch && selectedBranches.length === 0) return;
+    
+    onCreate({ 
+      id: `tb-${Date.now()}`, 
+      name: name.trim(), 
+      date, 
+      type, 
+      startTime, 
+      endTime,
+      allBranch,
+      selectedBranches: allBranch ? [] : selectedBranches
+    });
     onOpenChange(false);
     reset();
   }
@@ -236,6 +278,31 @@ function AddTimeBlockDialog({
                 <Switch checked={allBranch} onCheckedChange={setAllBranch} />
               </label>
             </div>
+
+            {!allBranch && (
+              <div className="grid gap-1.5">
+                <label className="text-sm font-medium">Select Branches</label>
+                <div className="grid gap-2">
+                  {demoBranches.map((branch) => (
+                    <label key={branch.id} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedBranches.includes(branch.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedBranches(prev => [...prev, branch.id]);
+                          } else {
+                            setSelectedBranches(prev => prev.filter(id => id !== branch.id));
+                          }
+                        }}
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                      <span className="text-sm">{branch.name} ({branch.internalName})</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button type="submit">Create</Button>

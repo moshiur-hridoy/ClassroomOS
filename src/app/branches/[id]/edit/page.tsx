@@ -48,8 +48,8 @@ const demoBranches: Branch[] = [
   },
 ];
 
-export default async function EditBranchPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export default function EditBranchPage({ params }: { params: Promise<{ id: string }> }) {
+  const [id, setId] = React.useState<string>("");
   const router = useRouter();
   const [currentUserId] = React.useState("mgr-01");
   
@@ -90,22 +90,29 @@ export default async function EditBranchPage({ params }: { params: Promise<{ id:
     >;
   };
 
-  // Load branch data on mount
+  // Handle async params and load branch data
   React.useEffect(() => {
-    const branch = demoBranches.find(b => b.id === id);
-    if (branch) {
-      setFormState({
-        name: branch.name,
-        internalName: branch.internalName,
-        location: branch.location,
-        googleMapLink: (branch as any).googleMapLink || "",
-        rooms: branch.rooms.map((r) => ({ roomName: r.roomName, capacity: String(r.capacity), roomType: "Regular" })),
-        branchManagerUserId: branch.branchManagerUserId,
-        status: branch.status,
-        errors: {},
-      });
-    }
-  }, [id]);
+    const loadParams = async () => {
+      const { id: paramId } = await params;
+      setId(paramId);
+      
+      const branch = demoBranches.find(b => b.id === paramId);
+      if (branch) {
+        setFormState({
+          name: branch.name,
+          internalName: branch.internalName,
+          location: branch.location,
+          googleMapLink: (branch as any).googleMapLink || "",
+          rooms: branch.rooms.map((r) => ({ roomName: r.roomName, capacity: String(r.capacity), roomType: "Regular" })),
+          branchManagerUserId: branch.branchManagerUserId,
+          status: branch.status,
+          errors: {},
+        });
+      }
+    };
+    
+    loadParams();
+  }, [params]);
 
   function canEditBranch(branch: Branch) {
     if (isAdmin) return true;

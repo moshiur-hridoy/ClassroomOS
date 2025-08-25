@@ -33,6 +33,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 import { usePathname } from "next/navigation"
+import Link from "next/link"
 
 type NavItem = {
   title: string
@@ -46,7 +47,6 @@ const NAV_MAIN: NavItem[] = [
   { title: "Batches", href: "/batches", icon: Layers3 },
   { title: "Time blocks", href: "/holidays", icon: AlarmClockOff },
   { title: "Attendance", href: "/attendance", icon: ClipboardList },
-  { title: "Students", href: "/students", icon: GraduationCap },
 ]
 
 const NAV_SECONDARY: NavItem[] = [
@@ -80,10 +80,10 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
               {NAV_MAIN.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={isActive(item.href)}>
-                    <a href={item.href}>
+                    <Link href={item.href}>
                       <item.icon />
                       <span>{item.title}</span>
-                    </a>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -97,10 +97,10 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
               {NAV_SECONDARY.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={isActive(item.href)}>
-                    <a href={item.href}>
+                    <Link href={item.href}>
                       <item.icon />
                       <span>{item.title}</span>
-                    </a>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
